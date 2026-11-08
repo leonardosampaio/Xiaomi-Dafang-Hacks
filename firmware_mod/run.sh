@@ -5,9 +5,23 @@ export LD_LIBRARY_PATH='/system/sdcard/lib/:/thirdlib:/system/lib'
 CONFIGPATH="/system/sdcard/config"
 LOGDIR="/system/sdcard/log"
 LOGPATH="$LOGDIR/startup.log"
-if [ ! -d $LOGDIR ]; then
-  mkdir -p $LOGDIR
+
+## Data partition (mmcblk0p2, if the card has one): first boot expansion,
+## fsck and mount; DCIM/ and time_lapse/ are bind mounted from it
+/system/sdcard/scripts/sdcard_data.sh boot
+
+## Read-only SD card mode (see config/sdcard.conf.dist):
+SDCARD_READONLY=false
+DATA_READONLY=false
+SDCARD_LOG_TMPFS_SIZE=10m
+if [ -f "$CONFIGPATH/sdcard.conf" ]; then
+  . "$CONFIGPATH/sdcard.conf"
 fi
+
+## Logs are always kept in RAM (lost on reboot): writing them all the time
+## wears the card and corrupts it when the camera loses power
+mkdir -p $LOGDIR 2>/dev/null
+mount -t tmpfs -o size="${SDCARD_LOG_TMPFS_SIZE:-10m}" tmpfs $LOGDIR
 echo "==================================================" >> $LOGPATH
 echo "Starting the Dafang Hacks Custom Application Layer" >> $LOGPATH
 echo "==================================================" >> $LOGPATH
@@ -95,7 +109,8 @@ if [ ! -d $CRONPERIODIC ]; then
            ${CRONPERIODIC}/monthly
   echo "Created cron periodic directories" >> $LOGPATH
 fi
-/system/sdcard/bin/busybox crond -L /system/sdcard/log/crond.log -c /system/sdcard/config/cron/crontabs
+# -l 9: log only errors (each job run would be logged every minute, filling the logs in RAM)
+/system/sdcard/bin/busybox crond -l 9 -L /system/sdcard/log/crond.log -c /system/sdcard/config/cron/crontabs
 
 ## Set Hostname
 if [ ! -f $CONFIGPATH/hostname.conf ]; then
@@ -204,6 +219,16 @@ fi
 ## Configure Motion:
 if [ -f /system/sdcard/controlscripts/configureMotion ]; then
     . /system/sdcard/controlscripts/configureMotion  2>/dev/null
+fi
+
+## Remount the SD card read-only if configured to do so:
+if [ "$SDCARD_READONLY" = true ]; then
+  sd_sync
+  if remount_sdcard_ro; then
+    echo "SD card remounted read-only" >> $LOGPATH
+  else
+    echo "WARNING: failed to remount the SD card read-only (files open for writing or swap file in use?)" >> $LOGPATH
+  fi
 fi
 
 ## Autostart all enabled services:

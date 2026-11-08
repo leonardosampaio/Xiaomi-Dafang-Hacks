@@ -1,6 +1,8 @@
 server.document-root = "/system/sdcard/www"
 server.pid-file = "/run/lighttpd.pid"
 server.port = 80
+# Don't show the lighttpd version in the "Server" header
+server.tag = ""
 
 # uncomment to allow more exotic hostnames e.g. with underscores
 #server.http-parseopt-host-strict = "disable"
@@ -14,7 +16,8 @@ mimetype.assign = (
   ".js" => "text/javascript"
 )
 index-file.names = ( "index.html" )
-server.modules = ("mod_alias",
+server.modules = ("mod_access",
+		  "mod_alias",
 		  "mod_auth",
 		  "mod_authn_file",
 		  "mod_redirect",
@@ -61,6 +64,24 @@ $HTTP["url"] !~ "^/.well-known/(.*)" {
 			}
 		}
 	}
+}
+
+# Requests coming through the Cloudflare Tunnel (cloudflared connects from
+# 127.0.0.1) always need the tunnel user/password set in the web UI
+# (Network services > Cloudflare Tunnel). Do not load mod_extforward: it would
+# let clients spoof the remote address with X-Forwarded-For.
+$HTTP["remoteip"] == "127.0.0.1" {
+	auth.backend = "htdigest"
+	auth.backend.htdigest.userfile = "/system/sdcard/config/lighttpd.tunnel.user"
+	auth.require = ( "/" => ("method" => "basic", "realm" => "cloudflared", "require" => "valid-user"))
+	# Requests with credentials are logged with the client IP for the IP ban
+	# (scripts/tunnel-ban.sh): a 401 here is a failed login
+	$REQUEST_HEADER["Authorization"] =~ "." {
+		accesslog.filename = "/tmp/lighttpd-tunnel-auth.log"
+		accesslog.format = "%{CF-Connecting-IP}i %>s"
+	}
+	# Banned IPs (written by scripts/tunnel-ban.sh)
+	include_shell "cat /tmp/lighttpd-tunnel-ban.conf 2>/dev/null || true"
 }
 
 ## enable debugging

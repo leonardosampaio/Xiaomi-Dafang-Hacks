@@ -73,6 +73,9 @@ $.get("cgi-bin/state.cgi", {cmd: "hostname"}, function(hostname){document.title 
   <button class="w3-bar-item w3-button" onclick="openPage('control');" title="System Control"><i class="fas fa-tools"></i></button>
   <button class="w3-bar-item w3-button" onclick="openPage('info');" title="System Information"><i class="fa fa-info-circle"></i></button>
   <button class="w3-bar-item w3-button" onclick="openPage('sdcard');" title="View files on SD Card"><i class="fa fa-sd-card"></i></button>
+  <button class="w3-bar-item w3-button w3-right" id="sdStatus" onclick="openSdModal();" title="SD card mode">
+    <i class="fa fa-sd-card"></i> <span id="sdStatusText" class="w3-tag w3-round">SD</span>
+  </button>
   <div class="w3-dropdown-hover w3-right">
     <button class="w3-button" id="notifAlarm"><i  class="fa fa-bell"></i></button>
     <div class="w3-dropdown-content w3-bar-block w3-card-4" style="width:250px">
@@ -85,6 +88,24 @@ $.get("cgi-bin/state.cgi", {cmd: "hostname"}, function(hostname){document.title 
 </div>
 <div  id="content" class="w3-container">
 
+</div>
+
+<!-- SD card mode modal -->
+<div id="sdModal" class="w3-modal">
+  <div class="w3-modal-content">
+    <header class="w3-container w3-theme">
+        <span onclick="document.getElementById('sdModal').style.display='none'"
+        class="w3-button w3-display-topright">&times;</span>
+       <h2>SD card</h2>
+     </header>
+     <div class="w3-container">
+      <p>Read-only protects a partition from corruption when the camera loses power, but
+      nothing can be saved on it meanwhile. <i>Until reboot</i> changes it now only;
+      <i>at boot</i> also keeps the change after a reboot.</p>
+      <div id="sdParts"></div>
+      <p id="sdModalResult" class="w3-small"></p>
+    </div>
+  </div>
 </div>
 
 <!-- About modal -->

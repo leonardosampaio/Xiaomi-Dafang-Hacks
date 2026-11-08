@@ -66,6 +66,20 @@ if [ -n "$F_cmd" ]; then
 	logMounts)
 		mount
 		;;
+	# Tunnel logs may contain text sent by anyone on the internet (URLs, headers):
+	# escape HTML, the page inserts the output as HTML
+	logTunnel)
+		tail -n 200 /system/sdcard/log/cloudflared.log 2>/dev/null \
+			| sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'
+		;;
+	logTunnelBan)
+		echo "Banned IPs (minutes left):"
+		/system/sdcard/scripts/tunnel-ban.sh list 2>/dev/null | sed 's/^/  /'
+		echo ""
+		echo "Events:"
+		tail -n 100 /tmp/tunnel-ban/events.log 2>/dev/null \
+			| sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'
+		;;
 	esac
 	return
 	;;

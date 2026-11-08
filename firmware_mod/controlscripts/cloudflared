@@ -1,0 +1,121 @@
+#!/bin/sh
+
+# Cloudflare Tunnel (cloudflared) control script
+# Configuration: /system/sdcard/config/cloudflared.conf
+
+PIDFILE="/run/cloudflared.pid"
+BAN_PIDFILE="/run/tunnel-ban.pid"
+BAN_BIN="/system/sdcard/scripts/tunnel-ban.sh"
+BINARY="/system/sdcard/bin/cloudflared"
+CONFIG="/system/sdcard/config/cloudflared.conf"
+LOGFILE="/system/sdcard/log/cloudflared.log"
+CA_FILE="/system/sdcard/config/ssl/cacert/cacert.pem"
+
+if [ ! -f "$CONFIG" ]; then
+  cp "$CONFIG.dist" "$CONFIG" 2>/dev/null || CONFIG="$CONFIG.dist"
+fi
+
+is_running()
+{
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+status()
+{
+  if is_running; then
+    echo "PID: $(cat "$PIDFILE")"
+  else
+    return 1
+  fi
+}
+
+start()
+{
+  if is_running; then
+    echo "cloudflared already running"
+    return 0
+  fi
+  rm -f "$PIDFILE"
+
+  if [ ! -x "$BINARY" ]; then
+    echo "cloudflared binary not found at $BINARY"
+    return 1
+  fi
+
+  . "$CONFIG"
+  if [ -z "$TOKEN" ]; then
+    echo "No tunnel token configured in $CONFIG"
+    return 1
+  fi
+
+  # lighttpd needs the tunnel user file to exist (an empty file denies every request)
+  [ -f /system/sdcard/config/lighttpd.tunnel.user ] || : > /system/sdcard/config/lighttpd.tunnel.user 2>/dev/null
+
+  mkdir -p "$(dirname "$LOGFILE")"
+  # Keep the log small on the SD card
+  if [ -f "$LOGFILE" ] && [ "$(wc -c < "$LOGFILE")" -gt 1048576 ]; then
+    mv "$LOGFILE" "$LOGFILE.old"
+  fi
+
+  echo "Starting cloudflared"
+  # The token is passed through the environment so it doesn't show up in ps
+  TUNNEL_TOKEN="$TOKEN" SSL_CERT_FILE="$CA_FILE" GOGC=50 HOME=/system/sdcard/root \
+    /system/sdcard/bin/busybox nohup "$BINARY" tunnel --no-autoupdate \
+      --protocol "${PROTOCOL:-http2}" --loglevel "${LOGLEVEL:-info}" \
+      $EXTRA_ARGS run >> "$LOGFILE" 2>&1 &
+  echo "$!" > "$PIDFILE"
+  ban_start
+}
+
+# IP ban for failed web UI logins through the tunnel (scripts/tunnel-ban.sh)
+ban_start()
+{
+  ban_stop
+  /system/sdcard/bin/busybox nohup "$BAN_BIN" run >/dev/null 2>&1 &
+  echo "$!" > "$BAN_PIDFILE"
+}
+
+ban_stop()
+{
+  pid="$(cat "$BAN_PIDFILE" 2>/dev/null)"
+  [ -n "$pid" ] && kill "$pid" 2>/dev/null
+  tail_pid="$(cat /tmp/tunnel-ban/tail.pid 2>/dev/null)"
+  [ -n "$tail_pid" ] && kill "$tail_pid" 2>/dev/null
+  rm -f "$BAN_PIDFILE" /tmp/tunnel-ban/tail.pid
+}
+
+stop()
+{
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null
+    # Give cloudflared a few seconds to close connections gracefully
+    i=0
+    while kill -0 "$pid" 2>/dev/null && [ $i -lt 5 ]; do
+      sleep 1
+      i=$((i + 1))
+    done
+    kill -9 "$pid" 2>/dev/null
+    rm -f "$PIDFILE"
+    ban_stop
+    echo "cloudflared stopped"
+  else
+    echo "Could not find a running cloudflared."
+  fi
+}
+
+restart()
+{
+  stop
+  start
+}
+
+if [ $# -eq 0 ]; then
+  start
+else
+  case $1 in start|stop|status|restart|ban_start|ban_stop)
+    $1
+    ;;
+  esac
+fi

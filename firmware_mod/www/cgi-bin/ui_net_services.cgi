@@ -64,6 +64,30 @@ if [ -n "$F_cmd" ]; then
     echo "sender#:#${sender}"
     echo "accessToken#:#${access_token}"
 	;;
+  get_config_cloudflared)
+    if [ ! -f "/system/sdcard/config/cloudflared.conf" ]; then
+      cp /system/sdcard/config/cloudflared.conf.dist /system/sdcard/config/cloudflared.conf
+    fi
+    source /system/sdcard/config/cloudflared.conf
+    echo "cfToken#:#${TOKEN}"
+    echo "cfProtocol#:#${PROTOCOL}"
+    echo "cfLogLevel#:#${LOGLEVEL}"
+    echo "cfExtraArgs#:#${EXTRA_ARGS}"
+    echo "cfWebUser#:#${WEB_USER}"
+    echo "cfBanAttempts#:#${BAN_ATTEMPTS:-5}"
+    echo "cfBanTime#:#${BAN_TIME:-15}"
+    banned="$(/system/sdcard/scripts/tunnel-ban.sh list 2>/dev/null | awk '{ printf "%s%s (%s min)", sep, $1, $2; sep = ", " }')"
+    echo "cfBanned#:#${banned:-none}"
+    if [ -x /system/sdcard/bin/cloudflared ]; then
+      if /system/sdcard/controlscripts/cloudflared status > /dev/null; then
+        echo "cfStatus#:#Running"
+      else
+        echo "cfStatus#:#Stopped"
+      fi
+    else
+      echo "cfStatus#:#Binary not found (/system/sdcard/bin/cloudflared)"
+    fi
+  ;;
   save_config_mqtt)
     echo "Save mqtt"
     if [ -n "${F_mqttUser+x}" ]; then
@@ -207,6 +231,109 @@ if [ -n "$F_cmd" ]; then
       rewrite_config /system/sdcard/config/matrix.conf access_token $F_accessToken
 		  echo "Matrix server access token set<br/>"
 	  fi
+    ;;
+  save_config_cloudflared)
+    CF_CONF=/system/sdcard/config/cloudflared.conf
+    if [ ! -f "$CF_CONF" ]; then
+      cp $CF_CONF.dist $CF_CONF
+    fi
+    source $CF_CONF
+    CF_OLD_SETTINGS="$TOKEN|$PROTOCOL|$LOGLEVEL|$EXTRA_ARGS"
+    CF_OLD_BAN="$BAN_ATTEMPTS|$BAN_TIME"
+    # The config file is sourced by a shell script: only accept safe characters
+    if [ -n "${F_cfToken+x}" ]; then
+      F_cfToken=$(printf '%b' "${F_cfToken//%/\\x}")
+      if echo "$F_cfToken" | grep -q '^[A-Za-z0-9+/=_-]*$'; then
+        TOKEN="$F_cfToken"
+        echo "Cloudflare tunnel token set<br/>"
+      else
+        echo "Invalid tunnel token, not saved<br/>"
+      fi
+    fi
+    if [ -n "${F_cfProtocol+x}" ]; then
+      case "$F_cfProtocol" in
+        auto|http2|quic) PROTOCOL="$F_cfProtocol"; echo "Cloudflare tunnel protocol set to $F_cfProtocol<br/>" ;;
+        *) echo "Invalid protocol, not saved<br/>" ;;
+      esac
+    fi
+    if [ -n "${F_cfLogLevel+x}" ]; then
+      case "$F_cfLogLevel" in
+        debug|info|warn|error|fatal) LOGLEVEL="$F_cfLogLevel"; echo "Cloudflare tunnel log level set to $F_cfLogLevel<br/>" ;;
+        *) echo "Invalid log level, not saved<br/>" ;;
+      esac
+    fi
+    if [ -n "${F_cfExtraArgs+x}" ]; then
+      F_cfExtraArgs=$(printf '%b' "$(echo "$F_cfExtraArgs" | sed 's/+/ /g; s/%/\\x/g')")
+      if echo "$F_cfExtraArgs" | grep -q '^[A-Za-z0-9 ._:/=,-]*$'; then
+        EXTRA_ARGS="$F_cfExtraArgs"
+        echo "Cloudflare tunnel extra arguments set to $F_cfExtraArgs<br/>"
+      else
+        echo "Invalid extra arguments, not saved<br/>"
+      fi
+    fi
+    # Web UI credentials used only for requests coming through the tunnel
+    # (lighttpd requires them for connections from 127.0.0.1). Only the
+    # htdigest hash of the password is stored.
+    CF_WEB_USERFILE=/system/sdcard/config/lighttpd.tunnel.user
+    CF_WEB_REALM=cloudflared
+    if [ -n "${F_cfWebUser+x}" ]; then
+      F_cfWebUser=$(printf '%b' "${F_cfWebUser//%/\\x}")
+      F_cfWebPass=$(printf '%b' "$(echo "$F_cfWebPass" | sed 's/+/ /g; s/%/\\x/g')")
+      if ! echo "$F_cfWebUser" | grep -q '^[A-Za-z0-9._-]*$'; then
+        echo "Invalid tunnel web user (use letters, numbers, . _ -), not saved<br/>"
+      elif [ -z "$F_cfWebUser" ]; then
+        WEB_USER=""
+        : > $CF_WEB_USERFILE
+        echo "Tunnel web user removed: all requests through the tunnel are denied<br/>"
+      elif [ -n "$F_cfWebPass" ]; then
+        WEB_USER="$F_cfWebUser"
+        hash=$(printf '%s' "$WEB_USER:$CF_WEB_REALM:$F_cfWebPass" | md5sum | cut -d' ' -f1)
+        echo "$WEB_USER:$CF_WEB_REALM:$hash" > $CF_WEB_USERFILE
+        echo "Tunnel web user set to $WEB_USER and password changed<br/>"
+      elif [ "$F_cfWebUser" != "$WEB_USER" ]; then
+        echo "To change the tunnel web user, also type a password. Not saved<br/>"
+      fi
+    fi
+    if [ -n "${F_cfBanAttempts+x}" ]; then
+      case "$F_cfBanAttempts" in
+        ''|*[!0-9]*) echo "Invalid number of failed logins, not saved<br/>" ;;
+        *) BAN_ATTEMPTS="$F_cfBanAttempts"
+           [ "$BAN_ATTEMPTS" -eq 0 ] && echo "IP ban disabled<br/>" || echo "IPs are banned after $BAN_ATTEMPTS failed logins<br/>" ;;
+      esac
+    fi
+    if [ -n "${F_cfBanTime+x}" ]; then
+      case "$F_cfBanTime" in
+        ''|0|*[!0-9]*) echo "Invalid ban duration (minutes, at least 1), not saved<br/>" ;;
+        *) BAN_TIME="$F_cfBanTime"; echo "Ban duration set to $BAN_TIME minutes<br/>" ;;
+      esac
+    fi
+    # Rewrite the values in place, keeping the comments of the file
+    grep -v -e '^TOKEN=' -e '^PROTOCOL=' -e '^LOGLEVEL=' -e '^EXTRA_ARGS=' -e '^WEB_USER=' -e '^BAN_ATTEMPTS=' -e '^BAN_TIME=' $CF_CONF > $CF_CONF.tmp
+    {
+      echo "TOKEN=\"$TOKEN\""
+      echo "PROTOCOL=\"$PROTOCOL\""
+      echo "LOGLEVEL=\"$LOGLEVEL\""
+      echo "EXTRA_ARGS=\"$EXTRA_ARGS\""
+      echo "WEB_USER=\"$WEB_USER\""
+      echo "BAN_ATTEMPTS=${BAN_ATTEMPTS:-5}"
+      echo "BAN_TIME=${BAN_TIME:-15}"
+    } >> $CF_CONF.tmp
+    mv $CF_CONF.tmp $CF_CONF
+    # The web user/password is read by lighttpd on each request: only restart
+    # cloudflared when its own settings changed
+    if [ "$CF_OLD_SETTINGS" != "$TOKEN|$PROTOCOL|$LOGLEVEL|$EXTRA_ARGS" ] && \
+       /system/sdcard/controlscripts/cloudflared status > /dev/null; then
+      /system/sdcard/controlscripts/cloudflared restart > /dev/null
+      echo "Cloudflare tunnel restarted<br/>"
+    elif [ "$CF_OLD_BAN" != "$BAN_ATTEMPTS|$BAN_TIME" ] && \
+       /system/sdcard/controlscripts/cloudflared status > /dev/null; then
+      /system/sdcard/controlscripts/cloudflared ban_start > /dev/null
+    fi
+    ;;
+  clear_bans_cloudflared)
+    # Detached: releasing restarts lighttpd, which would end this request
+    /system/sdcard/bin/busybox nohup sh -c "sleep 1; /system/sdcard/scripts/tunnel-ban.sh clear" > /dev/null 2>&1 &
+    echo "All banned IPs were released<br/>"
     ;;
   *)
     echo "Unsupported command '$F_cmd'"

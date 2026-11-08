@@ -1,0 +1,44 @@
+############################################################################
+# edit this file and move it to /system/sdcard/config/cloudflared.conf    #
+# (or configure it from the web UI: Network services > Cloudflare Tunnel) #
+############################################################################
+#
+# Cloudflare Tunnel (cloudflared) exposes services of the camera (web UI,
+# RTSP, SSH...) through Cloudflare without opening ports on your router.
+#
+# 1. Create a tunnel in the Cloudflare Zero Trust dashboard
+#    (Networks > Tunnels > Create a tunnel > Cloudflared) and copy its token.
+# 2. Add "Public hostnames" for the tunnel pointing to the camera services,
+#    e.g. https://localhost:443 (enable "No TLS Verify", the certificate is
+#    self-signed) or ssh://localhost:22, and set the web UI user/password for
+#    the tunnel (WEB_USER below).
+# 3. Put the cloudflared binary for linux/mipsle at
+#    /system/sdcard/bin/cloudflared. Cloudflare doesn't publish MIPS builds,
+#    so build it from https://github.com/cloudflare/cloudflared with:
+#      GOOS=linux GOARCH=mipsle GOMIPS=softfloat CGO_ENABLED=0 \
+#        go build -mod=mod -trimpath -ldflags "-s -w" -o cloudflared ./cmd/cloudflared
+# 4. Start the "Cloudflare Tunnel" service in Control System > Services.
+
+# Tunnel token (from the Cloudflare dashboard)
+TOKEN=""
+
+# Transport protocol used to reach Cloudflare: auto, http2 or quic.
+# http2 (TCP) uses less CPU/memory on the camera than quic.
+PROTOCOL="http2"
+
+# Log level: debug, info, warn, error, fatal
+LOGLEVEL="info"
+
+# Extra command line arguments for "cloudflared tunnel" (optional)
+EXTRA_ARGS=""
+
+# User for the web UI when it is accessed through the tunnel (requests from
+# 127.0.0.1). Its password hash is in /system/sdcard/config/lighttpd.tunnel.user;
+# set both from the web UI. Without a user every request through the tunnel is
+# denied. Local network access is not affected.
+WEB_USER=""
+
+# Ban the IPs that fail the web UI login through the tunnel BAN_ATTEMPTS times
+# within BAN_TIME minutes; the ban lasts BAN_TIME minutes. 0 disables the ban.
+BAN_ATTEMPTS=5
+BAN_TIME=15

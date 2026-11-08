@@ -94,7 +94,7 @@ if [ -n "$F_action" ]; then
       if [ $(cat /etc/TZ) != "$F_tz" ]; then
         echo "$F_tz" > /etc/TZ
         if [ $(cat /etc/TZ) = "$F_tz" ]; then
-          $BINPATH/busybox ntpd -q -n -p time.google.com 2>&1
+          $BINPATH/busybox ntpd -q -n -p "$(cat /system/sdcard/config/ntp_srv.conf 2>/dev/null || echo pool.ntp.br)" 2>&1
           getReturn 1234 "success" "The timezone has been changed successfully to '$F_tz'."
         else
           getReturn 1234 "error" "An error occurred while changing the timezone."

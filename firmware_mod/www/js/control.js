@@ -281,6 +281,7 @@ var serviceFriendlyNames = {
     "telegram-bot": "Telegram Bot",
     "timelapse": "Timelapse",
     "lighttpd": "Web server",
+    "cloudflared": "Cloudflare Tunnel",
 };
 
 //Function get config

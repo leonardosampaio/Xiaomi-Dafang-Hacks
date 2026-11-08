@@ -1,18 +1,25 @@
  <!-- System card-->
+<style>
+  .tab5 { width: 20%; }
+  @media (max-width: 600px) { .tab5 { width: 100%; } }
+</style>
 <div class="w3-panel w3-card">
 <h1> Network services configuration</h1>
 <div class="w3-row">
     <a href="javascript:void(0)" onclick="openTab(event, 'mqttTab');getConfig('mqtt');">
-      <div class="w3-quarter tablink w3-bottombar w3-hover-light-grey w3-padding w3-border-theme">MQTT</div>
+      <div class="w3-col tab5 tablink w3-bottombar w3-hover-light-grey w3-padding w3-border-theme">MQTT</div>
     </a>
     <a href="javascript:void(0)" onclick="openTab(event, 'mailTab');getConfig('mail');">
-      <div class="w3-quarter tablink w3-bottombar w3-hover-light-grey w3-padding">Mail</div>
+      <div class="w3-col tab5 tablink w3-bottombar w3-hover-light-grey w3-padding">Mail</div>
     </a>
     <a href="javascript:void(0)" onclick="openTab(event, 'telegramTab');getConfig('telegram');">
-      <div class="w3-quarter tablink w3-bottombar w3-hover-light-grey w3-padding">Telegram</div>
+      <div class="w3-col tab5 tablink w3-bottombar w3-hover-light-grey w3-padding">Telegram</div>
     </a>
     <a href="javascript:void(0)" onclick="openTab(event, 'matrixTab');getConfig('matrix');">
-      <div class="w3-quarter tablink w3-bottombar w3-hover-light-grey w3-padding">Matrix</div>
+      <div class="w3-col tab5 tablink w3-bottombar w3-hover-light-grey w3-padding">Matrix</div>
+    </a>
+    <a href="javascript:void(0)" onclick="openTab(event, 'cloudflaredTab');getConfig('cloudflared');">
+      <div class="w3-col tab5 tablink w3-bottombar w3-hover-light-grey w3-padding">Cloudflare Tunnel</div>
     </a>
     
   </div>
@@ -107,6 +114,52 @@
     <input id="sender" class="w3-input" type="text"><br />
     <label>Access token</label>
     <input id="accessToken" class="w3-input" type="text"><br />
+    <p><button class="w3-btn w3-theme" >Save</button></form></p>
+</div>
+<!-- Cloudflare Tunnel Tab-->
+<div id="cloudflaredTab" class="w3-container tab" style="display:none">
+  <p><form class="w3-container" onsubmit="saveConfig('cloudflared');return false" id="cloudflared"></p>
+    <p>Create a tunnel in the Cloudflare Zero Trust dashboard (Networks &gt; Tunnels), paste its token below
+    and add public hostnames pointing to the camera services (e.g. <code>https://localhost:443</code> with
+    "No TLS Verify", or <code>ssh://localhost:22</code>). Start the service in Control System &gt; Services.</p>
+    <label>Status</label>
+    <input id="cfStatus" class="w3-input" type="text" readonly><br />
+    <label>Tunnel token</label>
+    <input id="cfToken" class="w3-input" type="password" autocomplete="off"><br />
+    <label>Protocol</label>
+    <select id="cfProtocol" class="w3-select">
+      <option value="http2">http2 (TCP, lighter)</option>
+      <option value="quic">quic (UDP)</option>
+      <option value="auto">auto</option>
+    </select><br /><br />
+    <label>Log level (log file: /system/sdcard/log/cloudflared.log)</label>
+    <select id="cfLogLevel" class="w3-select">
+      <option value="debug">debug</option>
+      <option value="info">info</option>
+      <option value="warn">warn</option>
+      <option value="error">error</option>
+      <option value="fatal">fatal</option>
+    </select><br /><br />
+    <label>Extra arguments (optional)</label>
+    <input id="cfExtraArgs" class="w3-input" type="text"><br />
+    <h4>Web UI access through the tunnel</h4>
+    <p>Requests that come through the tunnel must log in with this user and password
+    (local network access is not affected). Without a user, every request through the
+    tunnel is denied. Leave the password empty to keep the current one.</p>
+    <label>User</label>
+    <input id="cfWebUser" class="w3-input" type="text" autocomplete="off"><br />
+    <label>Password</label>
+    <input id="cfWebPass" class="w3-input" type="password" autocomplete="new-password"><br />
+    <h4>Failed login ban</h4>
+    <p>IPs that fail the login through the tunnel this many times within the ban duration are
+    blocked (HTTP 403) for that duration. Use 0 to disable.</p>
+    <label>Failed logins before ban</label>
+    <input id="cfBanAttempts" class="w3-input" type="number" min="0"><br />
+    <label>Ban duration (minutes)</label>
+    <input id="cfBanTime" class="w3-input" type="number" min="1"><br />
+    <label>Banned IPs (remaining time)</label>
+    <input id="cfBanned" class="w3-input" type="text" readonly><br />
+    <button type="button" class="w3-btn w3-border" onclick="$.post('cgi-bin/ui_net_services.cgi', {cmd: 'clear_bans_cloudflared'}, function () { setTimeout(function () { getConfig('cloudflared'); }, 4000); });">Release all banned IPs</button><br />
     <p><button class="w3-btn w3-theme" >Save</button></form></p>
 </div>
   

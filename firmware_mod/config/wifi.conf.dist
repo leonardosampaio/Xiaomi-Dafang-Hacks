@@ -1,2 +1,6 @@
-connect_timeout=60
-scan_interval=30
+# Seconds to wait for a connection to one of the configured networks
+# (System configuration > Network) before opening the access point (min 30)
+connect_timeout=30
+# Seconds the access point stays open before trying the networks again (min 60).
+# It stays open while clients are connected to it.
+ap_timeout=300

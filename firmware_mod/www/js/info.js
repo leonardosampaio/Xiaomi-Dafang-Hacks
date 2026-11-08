@@ -25,7 +25,7 @@ function onLoad() {
     accordion();
     //Get configuration
     getConfig();
-    var infos = ["netInt", "netRoutes", "netDNS", "dmesg", "logVideo", "logCat", "logUpdate", "logProcess", "logMounts" ];
+    var infos = ["netInt", "netRoutes", "netDNS", "dmesg", "logVideo", "logCat", "logUpdate", "logProcess", "logMounts", "logTunnel", "logTunnelBan" ];
     for (i = 0; i < infos.length; i++)
         getInfo(infos[i]);
 

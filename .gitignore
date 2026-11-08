@@ -55,7 +55,10 @@ firmware_mod/config/telegram.conf
 firmware_mod/config/sendmail.conf
 firmware_mod/config/rtspserver.conf
 firmware_mod/config/ntp_srv.conf
+firmware_mod/config/cloudflared.conf
+firmware_mod/config/sdcard.conf
 firmware_mod/config/lighttpd.user
+firmware_mod/config/lighttpd.tunnel.user
 firmware_mod/config/lighttpd.pem
 firmware_mod/config/userscripts/motiondetection/*
 !firmware_mod/config/userscripts/motiondetection/*.dist
@@ -65,3 +68,6 @@ firmware_mod/root/.ssh/*
 
 # avoid committing OSX .DS_Store files
 .DS_Store
+
+# local device credentials
+ssh.txt

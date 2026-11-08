@@ -47,13 +47,21 @@
 
   <div id="network" class="w3-container tab" style="display:none">
         <p></p>
-        <label>Wifi Network SSID</label>
-        <input id="wifi_ssid" class="w3-input">
-        <br />
-        <label>Wifi Password</label>
-        <input id="wifi_password" class="w3-input" type="password" value="*****">
-        <br />
-        <label>Wifi Connect Timeout</label>
+        <label>Wifi networks</label>
+        <p class="w3-small">The camera connects to the available network with the highest priority.
+        Leave the password empty to keep the current one (or for an open network).</p>
+        <div class="w3-responsive">
+        <table class="w3-table-all" id="wifi_networks">
+          <thead>
+            <tr class="w3-theme">
+              <th>SSID</th><th>Password</th><th>Priority</th><th>Hidden</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        </div>
+        <p><button type="button" class="w3-btn w3-theme" onclick="addWifiNetwork();">Add network</button></p>
+        <label>Wifi Connect Timeout (seconds without connecting to any network before opening the access point, min 30)</label>
         <input id="connect_timeout" class="w3-input" type="number" min="30">
         <br />
         <label>Access Point SSID</label>
@@ -62,8 +70,8 @@
         <label>Access Point Password</label>
         <input id="ap_password" class="w3-input" type="password" value="*****">
         <br />
-        <label>Access Point Scan Interval</label>
-        <input id="scan_interval" class="w3-input" type="number" min="10">
+        <label>Access Point Duration (seconds the access point stays open before trying the networks again, min 60)</label>
+        <input id="ap_timeout" class="w3-input" type="number" min="60">
         <br />
         <input id="usb_eth" class="w3-check w3-theme" type="checkbox" checked="checked" />
         <label for="usb_eth">Enable USB Ethernet (Disables Wifi)</label>

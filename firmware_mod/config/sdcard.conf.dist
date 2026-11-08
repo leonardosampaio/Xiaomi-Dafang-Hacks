@@ -1,0 +1,32 @@
+#####################################################################
+# edit this file and move it to /system/sdcard/config/sdcard.conf  #
+#####################################################################
+#
+# Force the SD card to be mounted read-only after startup.
+#
+# This protects the FAT file system against corruption when the camera
+# loses power while writing (a common cause of "Volume was not properly
+# unmounted" / "Filesystem has been set read-only" errors).
+#
+# When enabled:
+#  - The card is remounted read-only right before the services in
+#    config/autostart are started.
+#  - Anything that writes to the card stops working: saving settings from
+#    the web UI, recordings/timelapse/snapshots in DCIM, the SD swap file
+#    (SWAP=true in swap.conf prevents the read-only remount), updates...
+#
+# To change settings temporarily, remount the card read-write over SSH:
+#     mount -o remount,rw /system/sdcard
+# make the changes and then reboot (or run: mount -o remount,ro /system/sdcard).
+# To disable it permanently, set SDCARD_READONLY=false (with the card in
+# read-write mode or on a PC) and reboot.
+
+SDCARD_READONLY=false
+
+# Size of the RAM disk that always holds /system/sdcard/log (logs are lost on reboot)
+SDCARD_LOG_TMPFS_SIZE=10m
+
+# Cards with the two partition layout (see scripts/sdcard_data.sh) have a data
+# partition (mmcblk0p2) for recordings and timelapse, checked with fsck
+# and mounted on every boot. Set to true to mount it read-only.
+DATA_READONLY=false

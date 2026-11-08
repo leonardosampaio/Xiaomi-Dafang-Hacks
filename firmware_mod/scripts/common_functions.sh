@@ -793,6 +793,58 @@ remount_sdcard() {
   mount -o remount,rw /system/sdcard
 }
 
+# Re-Mount the SD Card read-only (see config/sdcard.conf.dist)
+remount_sdcard_ro() {
+  mount -o remount,ro /system/sdcard
+}
+
+# Write the cached data of the SD card partitions to the card. There is no
+# working "sync" on the camera (the busybox of the card has no sync applet);
+# BLKFLSBUF (blockdev --flushbufs) writes out the mounted file system too.
+sd_sync() {
+  local dev
+  for dev in /dev/mmcblk0p1 /dev/mmcblk0p2; do
+    [ -b "$dev" ] && /system/sdcard/bin/busybox blockdev --flushbufs "$dev" 2>/dev/null
+  done
+  return 0
+}
+
+# State of an SD card partition for the web UI: sdcard_part_state <1|2>
+#   1 = system partition (mmcblk0p1, /system/sdcard)
+#   2 = data partition (mmcblk0p2, /system/sdcard/data, see scripts/sdcard_data.sh)
+# Sets PART_PRESENT (true|false), PART_MOUNT (ro|rw|none), PART_CONFIG (read-only
+# mode at boot: true|false) and PART_REASON (config|fs_error|unknown, when ro)
+sdcard_part_state() {
+  local dev mnt key
+  if [ "$1" = 2 ]; then
+    dev=mmcblk0p2; mnt=/system/sdcard/data; key=DATA_READONLY
+  else
+    dev=mmcblk0p1; mnt=/system/sdcard; key=SDCARD_READONLY
+  fi
+  PART_PRESENT=false; PART_MOUNT=none; PART_CONFIG=false; PART_REASON=""
+  [ -b "/dev/$dev" ] && PART_PRESENT=true
+  local opts="$(awk -v d="/dev/$dev" -v m="$mnt" '$1 == d && $2 == m { split($4, o, ","); print o[1] }' /proc/mounts)"
+  [ -n "$opts" ] && PART_MOUNT="$opts"
+  if [ -f /system/sdcard/config/sdcard.conf ]; then
+    grep -q "^$key=true" /system/sdcard/config/sdcard.conf && PART_CONFIG=true
+  fi
+  if [ "$PART_MOUNT" = "ro" ]; then
+    if dmesg | grep -q "FAT-fs ($dev).*read-only"; then
+      PART_REASON=fs_error
+    elif [ "$PART_CONFIG" = "true" ]; then
+      PART_REASON=config
+    else
+      PART_REASON=unknown
+    fi
+  fi
+}
+
+# State of the system partition (SD_MOUNT, SD_CONFIG, SD_REASON)
+sdcard_ro_state() {
+  sdcard_part_state 1
+  SD_MOUNT=$PART_MOUNT; SD_CONFIG=$PART_CONFIG; SD_REASON=$PART_REASON
+}
+
 # Run curl with github token if configured
 github_curl() {
 	github_token=$(get_config /system/sdcard/config/updates.conf github_token)
@@ -872,6 +924,32 @@ wpa_config_set() {
 	else
 		sed -i "/}/i $key=$val" "$wpa_config"
 	fi
+}
+
+# List the networks of wpa_supplicant.conf, one per line, fields separated
+# by \037: ssid (raw, quoted or hex), psk (raw), priority, scan_ssid, key_mgmt
+wpa_networks_list() {
+	local wpa_config="${1:-/system/sdcard/config/wpa_supplicant.conf}"
+	[ -s "$wpa_config" ] || return 0
+	/system/sdcard/bin/busybox awk 'BEGIN { OFS = "\037" }
+	/^[ \t]*network[ \t]*=[ \t]*\{/ { innet = 1; ssid = ""; psk = ""; prio = "0"; scan = "0"; km = ""; next }
+	innet && /^[ \t]*\}/ { print ssid, psk, prio, scan, km; innet = 0; next }
+	innet {
+		line = $0; sub(/^[ \t]+/, "", line); sub(/[ \t\r]+$/, "", line)
+		if (line ~ /^#/ || line !~ /=/) next
+		k = line; sub(/=.*/, "", k); v = line; sub(/^[^=]*=/, "", v)
+		if (k == "ssid") ssid = v; else if (k == "psk") psk = v
+		else if (k == "priority") prio = v; else if (k == "scan_ssid") scan = v
+		else if (k == "key_mgmt") km = v
+	}' "$wpa_config"
+}
+
+# Decode a raw wpa_supplicant ssid value ("quoted" or hex) to plain text
+wpa_ssid_decode() {
+	case "$1" in
+		\"*\") local v="${1#\"}"; echo "${v%\"}" ;;
+		*) printf '%b\n' "$(echo "$1" | sed 's/../\\x&/g')" ;;
+	esac
 }
 
 wpa_config_get() {
