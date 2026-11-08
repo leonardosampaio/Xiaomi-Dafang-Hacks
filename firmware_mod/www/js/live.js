@@ -8,10 +8,49 @@ function flip() {
 }
 
 //Functions for live stream with images
+//Refresh interval in seconds (0 = off), kept in the browser
+var liveRefreshSec = 1;
+try {
+    var saved = localStorage.getItem("liveRefresh");
+    if (saved !== null && !isNaN(parseInt(saved, 10))) liveRefreshSec = parseInt(saved, 10);
+} catch (e) {}
+
+//The image is only loaded while the browser tab is visible
+function liveVisible() {
+    return document.visibilityState !== "hidden" && $("#liveview").length > 0;
+}
+
+function stopLiveRefresh() {
+    if (timeoutJobs['live'] != undefined) {
+        clearTimeout(timeoutJobs['live']);
+        timeoutJobs['live'] = undefined;
+    }
+}
+
 function refreshLiveImage() {
+    if (!liveVisible()) return;
     var ts = new Date().getTime();
     $("#liveview").attr("src", "cgi-bin/currentpic.cgi?" + ts);
 }
+
+//Called when an image (or the error image) finished loading: schedule the next one
+function liveImageLoaded() {
+    if (liveRefreshSec > 0 && liveVisible())
+        scheduleRefreshJob('live', refreshLiveImage, liveRefreshSec * 1000);
+}
+
+function setLiveRefresh(sec) {
+    liveRefreshSec = parseInt(sec, 10) || 0;
+    try { localStorage.setItem("liveRefresh", liveRefreshSec); } catch (e) {}
+    stopLiveRefresh();
+    refreshLiveImage();
+}
+
+//Pause when the tab is hidden, load a new image as soon as it is visible again
+$(document).off("visibilitychange.live").on("visibilitychange.live", function () {
+    stopLiveRefresh();
+    refreshLiveImage();
+});
 
 //Function to download a screenshot
 function downloadScreenshot() {
@@ -162,8 +201,11 @@ function onLoad() {
 
     //Get record status 
     record("status");
-    // Make liveview self refresh
-    $("#liveview").attr("onload", "scheduleRefreshJob('live','refreshLiveImage()',1000);");
+    // Make liveview self refresh (only while the tab is visible)
+    if ($("#liveRefresh option[value='" + liveRefreshSec + "']").length == 0) liveRefreshSec = 1;
+    $("#liveRefresh").val(liveRefreshSec);
+    stopLiveRefresh();
+    refreshLiveImage();
 }
 
 //Main program
