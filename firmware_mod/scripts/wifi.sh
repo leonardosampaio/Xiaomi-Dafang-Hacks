@@ -141,7 +141,13 @@ wpa_cli_stop() {
 ntp_restart() {
   local SERVER="$(cat "$CONFIGPATH/ntp_srv.conf" 2>/dev/null)"
   [ -n "$SERVER" ] || return 0
-  killall ntpd > /dev/null 2>&1
+  # ntpd runs as "busybox ntpd" (comm is "busybox"), so killall can't find it:
+  # kill the daemons by PID (not the one-shot "ntpd -q" syncs of the web UI)
+  local PIDS="$(ps | awk '$4 ~ /busybox$/ && $5 == "ntpd" && !/ -q/ {print $1}')"
+  if [ -n "$PIDS" ]; then
+    log info "Stopping ntpd ($(echo $PIDS))"
+    kill $PIDS > /dev/null 2>&1
+  fi
   log info "Starting ntpd ($SERVER)"
   "$BBOX_BIN" ntpd -p "$SERVER"
 }
